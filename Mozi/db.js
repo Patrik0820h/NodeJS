@@ -4,7 +4,7 @@ const dbconfig = {
     host: 'localhost',
     user: 'root',
     database: 'mozi',
-    port: '3307'
+    port: '3306'
 }
 
 const pool = mysql.createPool(dbconfig)
