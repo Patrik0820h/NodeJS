@@ -141,4 +141,103 @@ router.patch('/:id/statusz', async (req,res) => {
     }
 })
 
+router.post('/:id/alkatreszek', async (req,res) => {
+    let conn
+    try {
+        conn = await pool.getConnection()
+        await conn.beginTransaction()
+
+        const id = Number(req.params.id)
+        const alkatreszID = Number(req.body.alkatreszId)
+        const db = Number(req.body.db)
+
+        if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(alkatreszID) || alkatreszID <= 0 || !Number.isInteger(db) || db <= 0) {
+            await conn.rollback()
+            return res.status(400).json({error: "hibas bemeneti adatok."})
+        }
+        
+        let munkalap = "SELECT * FROM munkalapok WHERE id = ? FOR UPDATE"
+        let [rows] = await conn.query(munkalap, [id])
+        if (rows.length === 0) {
+            await conn.rollback()
+            return res.status(404).json({error: "A munkalap nem talalhato."})
+        }
+
+        let alkatresz = "SELECT * FROM alkatreszek WHERE id = ? FOR UPDATE"
+        let [rows2] = await conn.query(alkatresz, [alkatreszID])
+        if (rows2.length === 0) {
+            await conn.rollback()
+            return res.status(404).json({error: "Az alkatresz nem talalhato."})
+        } 
+
+        if (rows2[0].keszlet < db) {
+            await conn.rollback()
+            return res.status(409).json({error: "Nincs elegendo keszlet."})
+        }
+
+        let van_e_alkatresz = "SELECT * FROM felhasznalasok WHERE munkalap_id = ? AND alkatresz_id = ?"
+        let [rows3] = await conn.query(van_e_alkatresz, [id, alkatreszID])
+        if (rows3.length > 0) {
+            let sql = "UPDATE felhasznalasok SET db = db + ? WHERE munkalap_id = ? AND alkatresz_id = ?"
+            await conn.query(sql, [db, id, alkatreszID])
+        } else {
+            let sql = "INSERT INTO felhasznalasok (munkalap_id, alkatresz_id, db) VALUES (?, ?, ?)"
+            await conn.query(sql, [id, alkatreszID, db]) 
+        } 
+
+        await conn.query("UPDATE alkatreszek SET keszlet = keszlet - ? WHERE id = ?", [db, alkatreszID])
+        await conn.commit()
+
+        let sql = `
+            SELECT m.*, u.nev, u.telefon
+            FROM munkalapok m
+            JOIN ugyfelek u ON m.ugyfel_id = u.id
+            WHERE m.id = ?
+        `
+
+        let [munkalap_vissza] = await conn.query(sql, [id])
+
+        let sql2 = `
+            SELECT a.id, a.nev, a.ar, f.db
+            FROM felhasznalasok f
+            JOIN alkatreszek a ON f.alkatresz_id = a.id
+            WHERE f.munkalap_id = ?
+        `
+
+        let [alkatreszek] = await conn.query(sql2, [id])
+
+        let alkatrészDij = 0
+
+        for (let alkatrész of alkatreszek) {
+            alkatrészDij += alkatrész.ar * alkatrész.db
+        }
+
+        let munkadij = munkalap_vissza[0].munkaora * 12000
+
+        let vegosszeg = alkatrészDij + munkadij
+
+        let teljesMunkalap = {
+            ...munkalap_vissza[0],
+            alkatreszek,
+            alkatrészDij,
+            munkadij,
+            vegosszeg
+        }
+
+        return res.status(201).json(teljesMunkalap)
+
+    } catch (err) {
+        if (conn) {
+            await conn.rollback()
+        }
+        console.log(err)
+        return res.status(500).send("Szerver oldali hiba.")
+    } finally {
+        if (conn) {
+            conn.release()
+        }
+    }
+
+})
+
 export default router
