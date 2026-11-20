@@ -15,14 +15,21 @@ router.get('/', (req,res) => {
 
 router.post('/register', async (req,res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, role } = req.body;
 
-        if (!username || !password) {
-            return res.status(400).json({error: "A felhasznalo nev es jelszo kotelezo."});
+        if (!username || !password || !role) {
+            return res.status(400).json({error: "Minden mezo kitoltese kotelezo."});
         }
 
         if (password.length < 8) {
             return res.status(400).json({error: "A jelszonak legalabb 8 karakteresnek kell lennie."});
+        }
+
+        const [roles] = await pool.query(
+            "SELECT id FROM roles WHERE name = ?", [role]
+        );
+        if (roles.length === 0) {
+            return res.status(400).json({error: "Ervenytelen szerepkor."});
         }
 
         let selectuser = "SELECT username FROM users WHERE username = ?";
@@ -33,8 +40,8 @@ router.post('/register', async (req,res) => {
 
         const hashedpassword = await bcrypt.hash(password, 10)
 
-        let insertuser = "INSERT INTO users (username, password) VALUES (?,?)";
-        let [rows2] = await pool.query(insertuser, [username, hashedpassword]);
+        let insertuser = "INSERT INTO users (username, password, role_id) VALUES (?,?,?)";
+        let [rows2] = await pool.query(insertuser, [username, hashedpassword, roles[0].id]);
         if (rows2.affectedRows === 0) {
             return res.status(500).json({ error: "Sikertelen regisztráció." });
         }
@@ -56,7 +63,7 @@ router.post('/login', async (req,res) => {
             return res.status(400).json({error: "A felhasznalo nev es jelszo kotelezo."});
         }
 
-        const selectuser = "SELECT u.*, r.name AS role from users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.username = ?";
+        const selectuser = "SELECT u.Id AS id, u.username, u.password, r.name AS role from users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.username = ?";
         let [rows] = await pool.query(selectuser, [username]);
         if (rows.length === 0) {
             return res.status(401).json({ error: "Hibas felhasznalonev vagy jelszo." });
@@ -70,6 +77,7 @@ router.post('/login', async (req,res) => {
         if (!process.env.JWT_SECRET) {
             return res.status(500).json({error: 'JWT_SECRET nincs beallitva!'});
         }
+
         const token = jwt.sign({ id: rows[0].id, username: rows[0].username, role: rows[0].role }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
         return res.status(200).json({message: "Sikeres bejelentkezes.", token});
@@ -80,7 +88,7 @@ router.post('/login', async (req,res) => {
     }
 })
 
-router.get('/profile', authMiddleware, userMiddleware, async (req,res) => {
+router.get('/profile', authMiddleware, async (req,res) => {
     try {
         let sql = "SELECT u.id, u.username, r.name AS role FROM users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.id = ?"
         let [rows] = await pool.query(sql, [req.user.id])
@@ -103,6 +111,10 @@ router.delete('/user/:id', authMiddleware, adminMiddleware, async (req,res) => {
 
         if (!Number.isInteger(Id) || Id <= 0) {
             return res.status(400).json({error: "Az ID csak pozitiv egesz szam lehet."});
+        }
+
+        if (Number(req.user.id) === Id) {
+            return res.status(403).json({error: 'Nem törölheted saját magadat!'});
         }
 
         let deleteuser = "DELETE FROM users WHERE Id = ?";

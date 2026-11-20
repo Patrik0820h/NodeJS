@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bejelentkezes</title>
+    <style>
+        .success {
+            color: green;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <form action="" id="loginForm" style="text-align: center; margin-top: 15rem;">
+        <label for="" style="text-decoration: underline; font-weight: bold;">Bejelentkezes</label><br><br>
+        <label for="username">Add meg a felhasznalo neved: </label>
+        <input type="text" placeholder="peldanev" id="username" name="username" required><br>
+        <label for="password">Add meg a jelszavad: </label>
+        <input type="password" placeholder="peldajelszo" id="password" name="password" required><br>
+
+        <button type="submit">Bejelentkezes</button><br><br>
+    </form>
+    <div style="text-align: center;">
+        <a href="Register.html">Regisztracio (Uj fiok eseten)</a><br><br>
+        <a href="User.html">Felhasználói felület (Csak felhasznalo szerep)</a><br>
+        <a href="Admin.html">Adminisztratori felület (Csak adminisztrator szerep)</a>
+    </div>
+    <p id="message"></p>
+</body>
+<script>
+    const form = document.getElementById('loginForm');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const username_box = document.getElementById('username').value;
+        const password_box = document.getElementById('password').value;
+
+        try {
+
+            const response = await fetch('http://localhost:3000/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: username_box,
+                    password: password_box
+                })
+            })
+            const data = await response.json();
+
+            const message_box = document.getElementById('message');
+            if (response.ok) {
+                localStorage.setItem('token', data.token);
+                message_box.textContent = "Sikeres bejelentkezes.";
+                message_box.className = 'success';
+
+            } else {
+                message_box.textContent = data.error;
+                message_box.className = 'error';
+            }
+
+        } catch (err) {
+            console.error(err);
+
+            const message_box = document.getElementById('message');
+            message_box.textContent = 'Nem sikerült kapcsolódni a szerverhez.';
+            message_box.className = 'error';
+        }
+    })
+</script>
+</html>

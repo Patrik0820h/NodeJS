@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Felhasznaloi felulet</title>
+</head>
+<body>
+    <div id="content" style="display: none; text-align: center; margin-top: 15rem;">
+    <h1>Felhasználói oldal</h1>
+
+    <button onclick="showProfile()">Profilom</button>
+    <button onclick="logout()">Kijelentkezés</button>
+
+    <div id="profile"></div>
+</div>
+</body>
+<script>
+    let userData = null
+    async function checkAccess() {
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                window.location.href = 'Login.html';
+                return;
+            }
+
+            const response = await fetch('http://localhost:3000/api/profile', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const data = await response.json();
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = 'Login.html';
+                return;
+            }
+
+            if (!response.ok || data.user?.role !== 'user') {
+                alert('Ehhez az oldalhoz nincs jogosultságod!');
+                window.location.href = 'Login.html';
+                return;
+            }
+
+            userData = data.user
+            document.getElementById('content').style.display = 'block';
+        
+        } catch (err) {
+            console.error(err);
+        }
+    }
+    checkAccess();
+
+    function showProfile() {
+        document.getElementById('profile').innerHTML = `
+        <p>ID: ${userData.id}</p>
+        <p>Felhasználónév: ${userData.username}</p>
+        <p>Szerepkör: ${userData.role}</p>
+        `;
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = 'Login.html';
+    }
+</script>
+</html>

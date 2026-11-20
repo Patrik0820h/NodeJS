@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adminisztratori felulet</title>
+    <style>
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="content" style="display: none; text-align: center; margin-top: 15rem;">
+        <h1>Adminisztrátori oldal</h1>
+
+        <button onclick="showUsers()">Felhasználók</button>
+
+        <br><br>
+
+        <label style="font-weight: bold;">Felhasználó törlése</label><br>
+
+        <form id="deleteForm">
+            <label for="userId">Felhasználó ID:</label>
+            <input type="number" id="userId" min="1" required>
+
+            <br>
+
+            <button type="submit">Törlés</button>
+        </form>
+
+        <br>
+
+        <button onclick="logout()">Kijelentkezés</button>
+
+        <div id="users"></div><br>
+
+        <div id="deleteMessage"></div>
+    </div>
+</body>
+<script>
+    async function checkAccess() {
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                window.location.href = 'Login.html';
+                return;
+            }
+
+            const response = await fetch('http://localhost:3000/api/profile', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.status === 401) {
+                logout();
+                return;
+            }
+
+            if (!response.ok || data.user?.role !== 'admin') {
+                alert('Ehhez az oldalhoz nincs jogosultságod!');
+                window.location.href = 'Login.html';
+                return;
+            }
+
+            document.getElementById('content').style.display = 'block';
+
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function showUsers() {
+        const token = localStorage.getItem('token');
+
+        try {
+            const response = await fetch('http://localhost:3000/api/users', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.message || data.error);
+                return;
+            }
+
+            const usersDiv = document.getElementById('users');
+            usersDiv.innerHTML = '';
+
+            data.forEach(user => {
+                const p = document.createElement('p');
+
+                p.textContent = `ID: ${user.id} | Felhasználónév: ${user.username} | Szerepkör: ${user.role}`;
+
+                usersDiv.appendChild(p);
+            });
+
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    document.getElementById('deleteForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const token = localStorage.getItem('token');
+        const id = document.getElementById('userId').value;
+        const message_box = document.getElementById('deleteMessage');
+
+        if (!confirm(`Biztosan törölni szeretnéd a ${id} ID-jú felhasználót?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3000/api/user/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.status === 401) {
+                logout();
+                return;
+            }
+
+            if (!response.ok) {
+                message_box.textContent = data.error || data.message || 'Sikertelen törlés!';
+                message_box.className = 'error';
+                return;
+            }
+
+            message_box.textContent = data.message;
+            message_box.className = 'success';
+
+            document.getElementById('userId').value = '';
+
+            showUsers();
+
+        } catch (err) {
+            console.error(err);
+
+            message_box.textContent = 'Nem sikerült kapcsolódni a szerverhez.';
+            message_box.className = 'error';
+        }
+    });
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.replace('Login.html');
+    }
+
+    checkAccess();
+</script>
+</html>
